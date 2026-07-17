@@ -1,0 +1,943 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>AI 김반장 | 민원·고충 서류 생성기 - 공구리닷컴</title>
+  <meta name="description" content="공구리닷컴 AI 김반장 - 음성 또는 텍스트로 민원·고충 서류를 자동 생성해 드립니다." />
+  <meta name="theme-color" content="#111111" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet" />
+
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --bg: #111111;
+      --bg2: #1a1a1a;
+      --bg3: #222222;
+      --yellow: #FFD600;
+      --yellow-dark: #E6C000;
+      --yellow-glow: rgba(255, 214, 0, 0.25);
+      --yellow-glow2: rgba(255, 214, 0, 0.08);
+      --red: #FF4444;
+      --green: #00CC66;
+      --text: #FFFFFF;
+      --text-dim: #AAAAAA;
+      --border: rgba(255, 214, 0, 0.3);
+      --radius: 18px;
+      --font: 'Noto Sans KR', sans-serif;
+    }
+
+    html, body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 16px;
+      min-height: 100vh;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-font-smoothing: antialiased;
+      overscroll-behavior: none;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 0 0 60px 0;
+    }
+
+    /* HEADER */
+    header {
+      width: 100%;
+      max-width: 600px;
+      padding: 32px 20px 16px;
+      text-align: center;
+    }
+
+    .logo-badge {
+      display: inline-block;
+      background: var(--yellow);
+      color: #111;
+      font-size: 13px;
+      font-weight: 900;
+      letter-spacing: 1.5px;
+      padding: 5px 14px;
+      border-radius: 999px;
+      margin-bottom: 14px;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      font-size: 38px;
+      font-weight: 900;
+      color: var(--yellow);
+      line-height: 1.15;
+      text-shadow: 0 0 30px var(--yellow-glow), 0 2px 4px rgba(0,0,0,0.5);
+      margin-bottom: 6px;
+      letter-spacing: -0.5px;
+    }
+
+    .subtitle {
+      font-size: 17px;
+      color: var(--text-dim);
+      font-weight: 400;
+      line-height: 1.5;
+      margin-bottom: 4px;
+    }
+
+    .tagline {
+      font-size: 24px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 0;
+    }
+
+    /* MAIN CONTAINER */
+    .main {
+      width: 100%;
+      max-width: 600px;
+      padding: 0 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    /* CARD */
+    .card {
+      background: var(--bg2);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      padding: 22px 18px;
+    }
+
+    .section-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--yellow);
+      letter-spacing: 0.5px;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .section-title::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    /* BIG BUTTONS */
+    .btn-group {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .big-btn {
+      width: 100%;
+      min-height: 80px;
+      border: none;
+      border-radius: 16px;
+      font-family: var(--font);
+      font-size: 24px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 14px 20px;
+      position: relative;
+      overflow: hidden;
+      transition: all 0.18s ease;
+      -webkit-tap-highlight-color: transparent;
+      letter-spacing: -0.3px;
+    }
+
+    .big-btn:active {
+      transform: scale(0.97);
+    }
+
+    /* Voice Button */
+    .btn-voice {
+      background: linear-gradient(135deg, #FFD600 0%, #FFA000 100%);
+      color: #111;
+      box-shadow: 0 4px 24px rgba(255,214,0,0.35), 0 2px 8px rgba(0,0,0,0.3);
+    }
+
+    .btn-voice:hover {
+      box-shadow: 0 6px 32px rgba(255,214,0,0.5), 0 2px 8px rgba(0,0,0,0.3);
+      transform: translateY(-2px);
+    }
+
+    .btn-voice.recording {
+      background: linear-gradient(135deg, #FF4444 0%, #CC0000 100%);
+      color: #fff;
+      box-shadow: 0 4px 24px rgba(255,68,68,0.5), 0 2px 8px rgba(0,0,0,0.3);
+      animation: pulse-btn 1.2s ease-in-out infinite;
+    }
+
+    @keyframes pulse-btn {
+      0%, 100% { box-shadow: 0 4px 24px rgba(255,68,68,0.5), 0 0 0 0 rgba(255,68,68,0.4); }
+      50% { box-shadow: 0 6px 32px rgba(255,68,68,0.7), 0 0 0 12px rgba(255,68,68,0); }
+    }
+
+    /* Text Button */
+    .btn-text {
+      background: var(--bg3);
+      color: var(--yellow);
+      border: 2px solid var(--yellow);
+      box-shadow: 0 2px 12px rgba(255,214,0,0.1);
+    }
+
+    .btn-text:hover {
+      background: var(--yellow-glow2);
+      box-shadow: 0 4px 20px rgba(255,214,0,0.2);
+      transform: translateY(-1px);
+    }
+
+    /* Copy Button */
+    .btn-copy-main {
+      background: var(--bg3);
+      color: #AAAAAA;
+      border: 2px solid #444;
+      box-shadow: none;
+      font-size: 22px;
+    }
+
+    .btn-copy-main.has-result {
+      color: #fff;
+      border-color: #666;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+    }
+
+    .btn-copy-main.has-result:hover {
+      border-color: var(--yellow);
+      color: var(--yellow);
+      transform: translateY(-1px);
+    }
+
+    .btn-copy-main.copied {
+      border-color: var(--green);
+      color: var(--green);
+      background: rgba(0, 204, 102, 0.08);
+    }
+
+    .btn-icon {
+      font-size: 32px;
+      flex-shrink: 0;
+    }
+
+    /* TEXT INPUT PANEL */
+    .input-panel {
+      display: none;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .input-panel.visible {
+      display: flex;
+    }
+
+    .input-label {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--yellow);
+    }
+
+    textarea#userText {
+      width: 100%;
+      min-height: 160px;
+      background: var(--bg3);
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      color: #fff;
+      font-family: var(--font);
+      font-size: 22px;
+      font-weight: 400;
+      line-height: 1.6;
+      padding: 16px;
+      resize: vertical;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    textarea#userText:focus {
+      border-color: var(--yellow);
+    }
+
+    textarea#userText::placeholder {
+      color: #555;
+      font-size: 18px;
+    }
+
+    .submit-btn {
+      width: 100%;
+      min-height: 70px;
+      border: none;
+      border-radius: 14px;
+      font-family: var(--font);
+      font-size: 24px;
+      font-weight: 700;
+      color: #111;
+      background: linear-gradient(135deg, #FFD600 0%, #FFA000 100%);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      box-shadow: 0 4px 20px rgba(255,214,0,0.3);
+      transition: all 0.18s;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .submit-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 28px rgba(255,214,0,0.45);
+    }
+
+    .submit-btn:active {
+      transform: scale(0.97);
+    }
+
+    /* VOICE STATUS */
+    .voice-status {
+      display: none;
+      align-items: center;
+      gap: 12px;
+      padding: 16px;
+      background: var(--bg3);
+      border-radius: 12px;
+      border: 1.5px solid rgba(255,68,68,0.3);
+    }
+
+    .voice-status.visible {
+      display: flex;
+    }
+
+    .mic-wave {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      flex-shrink: 0;
+    }
+
+    .mic-wave span {
+      display: block;
+      width: 4px;
+      background: var(--red);
+      border-radius: 2px;
+      animation: wave 0.9s ease-in-out infinite;
+    }
+
+    .mic-wave span:nth-child(1) { height: 10px; animation-delay: 0s; }
+    .mic-wave span:nth-child(2) { height: 20px; animation-delay: 0.1s; }
+    .mic-wave span:nth-child(3) { height: 28px; animation-delay: 0.2s; }
+    .mic-wave span:nth-child(4) { height: 20px; animation-delay: 0.1s; }
+    .mic-wave span:nth-child(5) { height: 10px; animation-delay: 0s; }
+
+    @keyframes wave {
+      0%, 100% { transform: scaleY(0.4); }
+      50% { transform: scaleY(1); }
+    }
+
+    .voice-status-text {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--red);
+    }
+
+    /* TRANSCRIPT */
+    .transcript-box {
+      display: none;
+      padding: 14px 16px;
+      background: var(--bg3);
+      border-radius: 12px;
+      border: 1.5px solid var(--border);
+    }
+
+    .transcript-box.visible {
+      display: block;
+    }
+
+    .transcript-label {
+      font-size: 13px;
+      color: var(--text-dim);
+      margin-bottom: 6px;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+    }
+
+    .transcript-text {
+      font-size: 20px;
+      color: #fff;
+      line-height: 1.6;
+      font-weight: 400;
+      word-break: break-all;
+    }
+
+    /* LOADING */
+    .loading-overlay {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      padding: 40px 20px;
+    }
+
+    .loading-overlay.visible {
+      display: flex;
+    }
+
+    .spinner {
+      width: 56px;
+      height: 56px;
+      border: 5px solid rgba(255,214,0,0.15);
+      border-top-color: var(--yellow);
+      border-radius: 50%;
+      animation: spin 0.85s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .loading-text {
+      font-size: 26px;
+      font-weight: 700;
+      color: var(--yellow);
+      text-align: center;
+      text-shadow: 0 0 20px var(--yellow-glow);
+      animation: flicker 1.6s ease-in-out infinite;
+    }
+
+    @keyframes flicker {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.65; }
+    }
+
+    /* RESULT */
+    .result-section {
+      display: none;
+    }
+
+    .result-section.visible {
+      display: block;
+    }
+
+    .result-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+      gap: 10px;
+    }
+
+    .result-title {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--yellow);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .result-badge {
+      background: var(--green);
+      color: #000;
+      font-size: 11px;
+      font-weight: 900;
+      padding: 3px 10px;
+      border-radius: 999px;
+      letter-spacing: 0.5px;
+      animation: pop-in 0.3s ease;
+    }
+
+    @keyframes pop-in {
+      from { transform: scale(0.7); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+
+    .result-copy-btn {
+      flex-shrink: 0;
+      border: 2px solid var(--yellow);
+      background: transparent;
+      color: var(--yellow);
+      font-family: var(--font);
+      font-size: 18px;
+      font-weight: 700;
+      border-radius: 10px;
+      padding: 9px 18px;
+      cursor: pointer;
+      transition: all 0.15s;
+      -webkit-tap-highlight-color: transparent;
+      white-space: nowrap;
+    }
+
+    .result-copy-btn:hover {
+      background: var(--yellow);
+      color: #111;
+    }
+
+    .result-copy-btn:active {
+      transform: scale(0.96);
+    }
+
+    .result-copy-btn.copied {
+      border-color: var(--green);
+      color: var(--green);
+      background: rgba(0, 204, 102, 0.1);
+    }
+
+    textarea#resultText {
+      width: 100%;
+      min-height: 280px;
+      background: #0d0d0d;
+      border: 2px solid rgba(255,214,0,0.2);
+      border-radius: 14px;
+      color: #fff;
+      font-family: var(--font);
+      font-size: 22px;
+      font-weight: 400;
+      line-height: 1.75;
+      padding: 20px;
+      resize: vertical;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    textarea#resultText:focus {
+      border-color: rgba(255,214,0,0.5);
+    }
+
+    /* ERROR */
+    .error-box {
+      display: none;
+      background: rgba(255,68,68,0.1);
+      border: 1.5px solid rgba(255,68,68,0.5);
+      border-radius: 12px;
+      padding: 16px;
+      color: #FF8888;
+      font-size: 20px;
+      font-weight: 400;
+      line-height: 1.5;
+      white-space: pre-line;
+    }
+
+    .error-box.visible {
+      display: block;
+    }
+
+    /* RESET BTN */
+    .reset-btn {
+      width: 100%;
+      min-height: 60px;
+      border: 2px solid #333;
+      background: transparent;
+      color: #666;
+      font-family: var(--font);
+      font-size: 20px;
+      font-weight: 700;
+      border-radius: 14px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: all 0.15s;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .reset-btn:hover {
+      border-color: #555;
+      color: #999;
+    }
+
+    .reset-btn:active {
+      transform: scale(0.97);
+    }
+
+    /* FOOTER */
+    footer {
+      width: 100%;
+      max-width: 600px;
+      padding: 20px 20px 10px;
+      text-align: center;
+    }
+
+    .footer-text {
+      font-size: 14px;
+      color: #444;
+      line-height: 1.6;
+    }
+
+    .footer-brand {
+      color: var(--yellow);
+      font-weight: 700;
+    }
+
+    @media (min-width: 480px) {
+      h1 { font-size: 44px; }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="logo-badge">⚙️ 공구리닷컴</div>
+    <h1>AI 김반장</h1>
+    <p class="tagline">민원·고충 서류 자동 생성기</p>
+    <p class="subtitle">말 한마디로 서류 한 장 뚝딱!</p>
+  </header>
+
+  <div class="main">
+
+    <!-- 입력 카드 -->
+    <div class="card" id="inputCard">
+      <div class="section-title">🗣️ 상황을 설명해 주세요</div>
+      <div class="btn-group">
+        <!-- 1. 음성 버튼 -->
+        <button class="big-btn btn-voice" id="voiceBtn" onclick="toggleVoice()">
+          <span class="btn-icon">🎙️</span>
+          <span id="voiceBtnLabel">음성으로 말하기</span>
+        </button>
+
+        <!-- 2. 텍스트 버튼 -->
+        <button class="big-btn btn-text" id="textBtn" onclick="toggleTextInput()">
+          <span class="btn-icon">⌨️</span>
+          <span>텍스트로 입력</span>
+        </button>
+      </div>
+
+      <!-- 음성 녹음 상태 -->
+      <div class="voice-status" id="voiceStatus" style="margin-top:14px;">
+        <div class="mic-wave">
+          <span></span><span></span><span></span><span></span><span></span>
+        </div>
+        <span class="voice-status-text">🎤 듣고 있습니더... 말씀이 끝나면 멈춰 주세요</span>
+      </div>
+
+      <!-- 인식된 텍스트 -->
+      <div class="transcript-box" id="transcriptBox" style="margin-top:12px;">
+        <div class="transcript-label">📝 인식된 내용</div>
+        <div class="transcript-text" id="transcriptText"></div>
+      </div>
+
+      <!-- 음성 완료 후 전송 버튼 -->
+      <button class="submit-btn" id="voiceSubmitBtn" style="display:none; margin-top:14px;" onclick="submitFromVoice()">
+        🚀 서류 만들기
+      </button>
+
+      <!-- 텍스트 입력 패널 -->
+      <div class="input-panel" id="inputPanel" style="margin-top:14px;">
+        <label class="input-label" for="userText">📋 민원 내용을 입력하세요</label>
+        <textarea id="userText" placeholder="예시) 우리 아파트 윗집에서 매일 밤 11시 이후에 뛰어다니는 소리가 들립니다. 층간소음 민원 서류를 작성해주세요."></textarea>
+        <button class="submit-btn" onclick="submitText()">
+          🚀 서류 만들기
+        </button>
+      </div>
+    </div>
+
+    <!-- 로딩 -->
+    <div class="loading-overlay" id="loadingOverlay">
+      <div class="spinner"></div>
+      <div class="loading-text">서류 타설 중입니더... 🏗️</div>
+    </div>
+
+    <!-- 에러 -->
+    <div class="error-box" id="errorBox"></div>
+
+    <!-- 결과 -->
+    <div class="card result-section" id="resultSection">
+      <div class="result-header">
+        <div class="result-title">
+          📄 완성된 서류
+          <span class="result-badge">완료</span>
+        </div>
+        <button class="result-copy-btn" id="resultCopyBtn" onclick="copyResult()">
+          📋 전체 복사
+        </button>
+      </div>
+      <textarea id="resultText" readonly></textarea>
+    </div>
+
+    <!-- 3. 결과 복사하기 왕버튼 -->
+    <button class="big-btn btn-copy-main" id="copyMainBtn" onclick="copyResult()">
+      <span class="btn-icon">📋</span>
+      <span id="copyMainLabel">결과 복사하기</span>
+    </button>
+
+    <!-- 다시 시작 -->
+    <button class="reset-btn" id="resetBtn" style="display:none;" onclick="resetAll()">
+      🔄 처음부터 다시 하기
+    </button>
+
+  </div>
+
+  <footer>
+    <p class="footer-text">
+      <span class="footer-brand">공구리닷컴 AI 김반장</span><br>
+      앱 설치 없이 브라우저에서 바로 사용<br>
+      © 2025 공구리닷컴. All rights reserved.
+    </p>
+  </footer>
+
+  <script>
+    var recognition = null;
+    var isRecording = false;
+    var currentResult = '';
+    var voiceTranscript = '';
+    var textPanelOpen = false;
+
+    var WEBHOOK_URL = 'https://hook.eu2.make.com/2nk17hsfq47rcquqsdos24ewlia339nv';
+
+    var voiceBtn       = document.getElementById('voiceBtn');
+    var voiceBtnLabel  = document.getElementById('voiceBtnLabel');
+    var voiceStatus    = document.getElementById('voiceStatus');
+    var transcriptBox  = document.getElementById('transcriptBox');
+    var transcriptText = document.getElementById('transcriptText');
+    var voiceSubmitBtn = document.getElementById('voiceSubmitBtn');
+    var inputPanel     = document.getElementById('inputPanel');
+    var loadingOverlay = document.getElementById('loadingOverlay');
+    var errorBox       = document.getElementById('errorBox');
+    var resultSection  = document.getElementById('resultSection');
+    var resultText     = document.getElementById('resultText');
+    var resultCopyBtn  = document.getElementById('resultCopyBtn');
+    var copyMainBtn    = document.getElementById('copyMainBtn');
+    var copyMainLabel  = document.getElementById('copyMainLabel');
+    var resetBtn       = document.getElementById('resetBtn');
+
+    function toggleVoice() {
+      if (isRecording) { stopVoice(); } else { startVoice(); }
+    }
+
+    function startVoice() {
+      if (textPanelOpen) {
+        inputPanel.classList.remove('visible');
+        textPanelOpen = false;
+      }
+      hideResult();
+
+      var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SR) {
+        showError('이 브라우저는 음성 인식을 지원하지 않습니다.\n크롬(Chrome) 브라우저를 사용해 주세요.');
+        return;
+      }
+
+      recognition = new SR();
+      recognition.lang = 'ko-KR';
+      recognition.continuous = true;
+      recognition.interimResults = true;
+
+      voiceTranscript = '';
+      transcriptText.textContent = '';
+
+      recognition.onstart = function() {
+        isRecording = true;
+        voiceBtn.classList.add('recording');
+        voiceBtnLabel.textContent = '🛑 녹음 중단';
+        voiceStatus.classList.add('visible');
+        transcriptBox.classList.remove('visible');
+        voiceSubmitBtn.style.display = 'none';
+        hideError();
+      };
+
+      recognition.onresult = function(e) {
+        var interim = '';
+        var final = '';
+        for (var i = e.resultIndex; i < e.results.length; i++) {
+          var t = e.results[i][0].transcript;
+          if (e.results[i].isFinal) { final += t; } else { interim += t; }
+        }
+        if (final) voiceTranscript += final;
+        transcriptText.textContent = voiceTranscript + interim;
+        transcriptBox.classList.add('visible');
+      };
+
+      recognition.onerror = function(e) {
+        var msg = '음성 인식 오류가 발생했습니다.';
+        if (e.error === 'not-allowed') msg = '🎤 마이크 권한이 필요합니다.\n브라우저 설정에서 마이크를 허용해 주세요.';
+        else if (e.error === 'no-speech') msg = '🔇 음성이 감지되지 않았습니다. 다시 시도해 주세요.';
+        else if (e.error === 'network') msg = '📡 네트워크 오류가 발생했습니다.';
+        showError(msg);
+        stopVoice(false);
+      };
+
+      recognition.onend = function() {
+        if (isRecording) {
+          isRecording = false;
+          voiceBtn.classList.remove('recording');
+          voiceBtnLabel.textContent = '🎙️ 음성으로 말하기';
+          voiceStatus.classList.remove('visible');
+          if (voiceTranscript.trim()) { voiceSubmitBtn.style.display = 'flex'; }
+        }
+      };
+
+      recognition.start();
+    }
+
+    function stopVoice(showSubmit) {
+      if (showSubmit === undefined) showSubmit = true;
+      if (recognition) {
+        isRecording = false;
+        recognition.stop();
+        recognition = null;
+      }
+      voiceBtn.classList.remove('recording');
+      voiceBtnLabel.textContent = '🎙️ 음성으로 말하기';
+      voiceStatus.classList.remove('visible');
+      if (showSubmit && voiceTranscript.trim()) {
+        voiceSubmitBtn.style.display = 'flex';
+      }
+    }
+
+    function submitFromVoice() {
+      var text = voiceTranscript.trim();
+      if (!text) { showError('🔇 인식된 내용이 없습니다. 다시 말씀해 주세요.'); return; }
+      voiceSubmitBtn.style.display = 'none';
+      sendToWebhook(text);
+    }
+
+    function toggleTextInput() {
+      if (isRecording) stopVoice(false);
+      hideResult();
+      textPanelOpen = !textPanelOpen;
+      if (textPanelOpen) {
+        inputPanel.classList.add('visible');
+        setTimeout(function() { document.getElementById('userText').focus(); }, 100);
+      } else {
+        inputPanel.classList.remove('visible');
+      }
+    }
+
+    function submitText() {
+      var text = document.getElementById('userText').value.trim();
+      if (!text) { showError('✏️ 내용을 입력해 주세요.'); return; }
+      hideError();
+      inputPanel.classList.remove('visible');
+      textPanelOpen = false;
+      sendToWebhook(text);
+    }
+
+    function sendToWebhook(text) {
+      loadingOverlay.classList.add('visible');
+      hideError();
+      hideResult();
+
+      fetch(WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: text })
+      })
+      .then(function(response) {
+        if (!response.ok) throw new Error('서버 오류: ' + response.status);
+        return response.json();
+      })
+      .then(function(data) {
+        if (data.success === 'true' || data.success === true) {
+          showResult(data.document || '');
+        } else {
+          throw new Error(data.message || '알 수 없는 오류가 발생했습니다.');
+        }
+      })
+      .catch(function(err) {
+        showError('⚠️ 서류 생성 중 오류가 발생했습니다.\n' + err.message);
+      })
+      .finally(function() {
+        loadingOverlay.classList.remove('visible');
+      });
+    }
+
+    function showResult(doc) {
+      currentResult = doc;
+      resultText.value = doc;
+      resultSection.classList.add('visible');
+      resetBtn.style.display = 'flex';
+      copyMainBtn.classList.add('has-result');
+      setTimeout(function() {
+        resultSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 150);
+    }
+
+    function hideResult() {
+      currentResult = '';
+      resultSection.classList.remove('visible');
+      if (resultText) resultText.value = '';
+      resetBtn.style.display = 'none';
+      copyMainBtn.classList.remove('has-result', 'copied');
+      copyMainLabel.textContent = '결과 복사하기';
+    }
+
+    function copyResult() {
+      if (!currentResult) {
+        showError('📋 복사할 서류가 없습니다. 먼저 서류를 생성해 주세요.');
+        return;
+      }
+      function onSuccess() {
+        resultCopyBtn.classList.add('copied');
+        resultCopyBtn.textContent = '✅ 복사됨!';
+        copyMainBtn.classList.add('copied');
+        copyMainLabel.textContent = '✅ 복사 완료!';
+        setTimeout(function() {
+          resultCopyBtn.classList.remove('copied');
+          resultCopyBtn.textContent = '📋 전체 복사';
+          copyMainBtn.classList.remove('copied');
+          copyMainLabel.textContent = '결과 복사하기';
+        }, 2500);
+      }
+      function onFail() {
+        try {
+          resultText.select();
+          document.execCommand('copy');
+          onSuccess();
+        } catch(e2) {
+          showError('📋 복사에 실패했습니다. 텍스트를 직접 선택해서 복사해 주세요.');
+        }
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(currentResult).then(onSuccess).catch(onFail);
+      } else {
+        onFail();
+      }
+    }
+
+    function showError(msg) {
+      errorBox.textContent = msg;
+      errorBox.classList.add('visible');
+      errorBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    function hideError() {
+      errorBox.classList.remove('visible');
+    }
+
+    function resetAll() {
+      if (isRecording) stopVoice(false);
+      voiceTranscript = '';
+      currentResult = '';
+      textPanelOpen = false;
+      voiceBtn.classList.remove('recording');
+      voiceBtnLabel.textContent = '🎙️ 음성으로 말하기';
+      voiceStatus.classList.remove('visible');
+      transcriptBox.classList.remove('visible');
+      transcriptText.textContent = '';
+      voiceSubmitBtn.style.display = 'none';
+      inputPanel.classList.remove('visible');
+      document.getElementById('userText').value = '';
+      hideResult();
+      hideError();
+      loadingOverlay.classList.remove('visible');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  </script>
+</body>
+</html>
