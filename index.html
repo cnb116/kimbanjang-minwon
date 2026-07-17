@@ -979,7 +979,7 @@
       })
       .then(function(data) {
         // success가 true가 아닌 경우
-        if (data.success === 'true' || data.success === true) {
+        if (String(data.success) === 'true') {
           showResult(data.document || '');
         } else {
           var err = new Error(data.message || '서버가 실패 응답을 반환했습니다.');
