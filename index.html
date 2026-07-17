@@ -519,7 +519,7 @@
       border-color: rgba(255,214,0,0.5);
     }
 
-    /* ERROR */
+    /* ERROR BOX (음성/입력 인라인 오류) */
     .error-box {
       display: none;
       background: rgba(255,68,68,0.1);
@@ -535,6 +535,106 @@
 
     .error-box.visible {
       display: block;
+    }
+
+    /* FETCH FAILURE PANEL */
+    .fail-panel {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      padding: 28px 18px;
+      background: var(--bg2);
+      border: 1.5px solid rgba(255,68,68,0.4);
+      border-radius: var(--radius);
+    }
+
+    .fail-panel.visible {
+      display: flex;
+    }
+
+    .fail-icon {
+      font-size: 48px;
+      line-height: 1;
+    }
+
+    .fail-msg {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--yellow);
+      text-align: center;
+      line-height: 1.5;
+    }
+
+    .fail-sub {
+      font-size: 18px;
+      color: var(--text-dim);
+      text-align: center;
+      line-height: 1.5;
+    }
+
+    .fail-btn-group {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      width: 100%;
+    }
+
+    .fail-retry-btn {
+      width: 100%;
+      min-height: 72px;
+      border: 2.5px solid var(--yellow);
+      background: transparent;
+      color: var(--yellow);
+      font-family: var(--font);
+      font-size: 24px;
+      font-weight: 700;
+      border-radius: 16px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      transition: all 0.18s;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .fail-retry-btn:hover {
+      background: var(--yellow-glow2);
+      box-shadow: 0 4px 20px rgba(255,214,0,0.2);
+      transform: translateY(-1px);
+    }
+
+    .fail-retry-btn:active {
+      transform: scale(0.97);
+    }
+
+    .fail-reset-btn {
+      width: 100%;
+      min-height: 60px;
+      border: 2px solid #444;
+      background: transparent;
+      color: #888;
+      font-family: var(--font);
+      font-size: 20px;
+      font-weight: 700;
+      border-radius: 14px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: all 0.15s;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .fail-reset-btn:hover {
+      border-color: #666;
+      color: #aaa;
+    }
+
+    .fail-reset-btn:active {
+      transform: scale(0.97);
     }
 
     /* RESET BTN */
@@ -653,8 +753,23 @@
       <div class="loading-text">서류 타설 중입니더... 🏗️</div>
     </div>
 
-    <!-- 에러 -->
+    <!-- 인라인 에러 (음성/입력) -->
     <div class="error-box" id="errorBox"></div>
+
+    <!-- 웹훅 실패 패널 -->
+    <div class="fail-panel" id="failPanel">
+      <div class="fail-icon">⚠️</div>
+      <div class="fail-msg" id="failMsg">서류 타설에 실패했습니다.<br>잠시 후 다시 시도해주세요.</div>
+      <div class="fail-sub" id="failSub"></div>
+      <div class="fail-btn-group">
+        <button class="fail-retry-btn" id="failRetryBtn" onclick="retryWebhook()">
+          🔁 다시 시도
+        </button>
+        <button class="fail-reset-btn" onclick="resetAll()">
+          🔄 처음부터 다시
+        </button>
+      </div>
+    </div>
 
     <!-- 결과 -->
     <div class="card result-section" id="resultSection">
@@ -697,8 +812,10 @@
     var currentResult = '';
     var voiceTranscript = '';
     var textPanelOpen = false;
+    var lastText = '';          // 재시도용 마지막 전송 텍스트
 
     var WEBHOOK_URL = 'https://hook.eu2.make.com/2nk17hsfq47rcquqsdos24ewlia339nv';
+    var TIMEOUT_MS  = 30000;   // 30초 타임아웃
 
     var voiceBtn       = document.getElementById('voiceBtn');
     var voiceBtnLabel  = document.getElementById('voiceBtnLabel');
@@ -709,6 +826,9 @@
     var inputPanel     = document.getElementById('inputPanel');
     var loadingOverlay = document.getElementById('loadingOverlay');
     var errorBox       = document.getElementById('errorBox');
+    var failPanel      = document.getElementById('failPanel');
+    var failMsg        = document.getElementById('failMsg');
+    var failSub        = document.getElementById('failSub');
     var resultSection  = document.getElementById('resultSection');
     var resultText     = document.getElementById('resultText');
     var resultCopyBtn  = document.getElementById('resultCopyBtn');
@@ -829,32 +949,90 @@
     }
 
     function sendToWebhook(text) {
+      lastText = text;  // 재시도용 저장
       loadingOverlay.classList.add('visible');
       hideError();
+      hideFailPanel();
       hideResult();
+
+      var controller = new AbortController();
+      var timeoutId = setTimeout(function() {
+        controller.abort();
+      }, TIMEOUT_MS);
 
       fetch(WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: text })
+        body: JSON.stringify({ text: text }),
+        signal: controller.signal
       })
       .then(function(response) {
-        if (!response.ok) throw new Error('서버 오류: ' + response.status);
+        clearTimeout(timeoutId);
+        // 서버 오류 (HTTP 상태코드 비정상)
+        if (!response.ok) {
+          var err = new Error('HTTP_' + response.status);
+          err.type = 'server';
+          err.status = response.status;
+          throw err;
+        }
         return response.json();
       })
       .then(function(data) {
+        // success가 true가 아닌 경우
         if (data.success === 'true' || data.success === true) {
           showResult(data.document || '');
         } else {
-          throw new Error(data.message || '알 수 없는 오류가 발생했습니다.');
+          var err = new Error(data.message || '서버가 실패 응답을 반환했습니다.');
+          err.type = 'server';
+          throw err;
         }
       })
       .catch(function(err) {
-        showError('⚠️ 서류 생성 중 오류가 발생했습니다.\n' + err.message);
+        clearTimeout(timeoutId);
+        var title = '서류 타설에 실패했습니다.<br>잠시 후 다시 시도해주세요.';
+        var sub = '';
+
+        if (err.name === 'AbortError') {
+          // 타임아웃
+          title = '요청 시간이 초과됐습니다. (30초)<br>다시 시도해주세요.';
+          sub = '서버 응답이 너무 늦거나 네트워크가 느릴 수 있습니다.';
+        } else if (err.type === 'server') {
+          // 서버 오류
+          title = '서버에서 오류가 발생했습니다.<br>잠시 후 다시 시도해주세요.';
+          sub = err.status ? '오류 코드: HTTP ' + err.status : err.message;
+        } else {
+          // 네트워크 오류 (fetch 자체 실패)
+          title = '네트워크 연결을 확인해주세요.<br>인터넷이 끊겼을 수 있습니다.';
+          sub = '연결 복구 후 다시 시도해주세요.';
+        }
+
+        showFailPanel(title, sub);
       })
       .finally(function() {
         loadingOverlay.classList.remove('visible');
       });
+    }
+
+    // 실패 패널 표시
+    function showFailPanel(title, sub) {
+      failMsg.innerHTML = title;
+      failSub.textContent = sub || '';
+      failPanel.classList.add('visible');
+      setTimeout(function() {
+        failPanel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 100);
+    }
+
+    // 실패 패널 숨기기
+    function hideFailPanel() {
+      failPanel.classList.remove('visible');
+    }
+
+    // 재시도 (마지막 텍스트로 재요청)
+    function retryWebhook() {
+      if (!lastText) { return; }
+      hideFailPanel();
+      sendToWebhook(lastText);
     }
 
     function showResult(doc) {
@@ -924,6 +1102,7 @@
       if (isRecording) stopVoice(false);
       voiceTranscript = '';
       currentResult = '';
+      lastText = '';
       textPanelOpen = false;
       voiceBtn.classList.remove('recording');
       voiceBtnLabel.textContent = '🎙️ 음성으로 말하기';
@@ -935,6 +1114,7 @@
       document.getElementById('userText').value = '';
       hideResult();
       hideError();
+      hideFailPanel();
       loadingOverlay.classList.remove('visible');
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
