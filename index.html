@@ -809,8 +809,9 @@
   <script>
     var recognition = null;
     var isRecording = false;
+    var isManualStop = false;   // 사용자가 명시적으로 정지한 경우 true
     var currentResult = '';
-    var voiceTranscript = '';
+    var voiceTranscript = '';   // isFinal 확정 텍스트 누적 버퍼
     var textPanelOpen = false;
     var lastText = '';          // 재시도용 마지막 전송 텍스트
 
@@ -853,53 +854,79 @@
         return;
       }
 
-      recognition = new SR();
-      recognition.lang = 'ko-KR';
-      recognition.continuous = true;
-      recognition.interimResults = true;
-
+      // ── 새 세션 시작 전에만 버퍼 초기화 (재시작 시엔 호출 안 됨) ──
+      isManualStop   = false;
       voiceTranscript = '';
       transcriptText.textContent = '';
+      transcriptBox.classList.remove('visible');
+      voiceSubmitBtn.style.display = 'none';
+      hideError();
 
+      _startRecognition();
+    }
+
+    // 실제 SpeechRecognition 인스턴스 생성 및 시작
+    // 재시작(onend 자동 복구) 시에도 호출됨 → 버퍼는 건드리지 않음
+    function _startRecognition() {
+      var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+      recognition = new SR();
+      recognition.lang = 'ko-KR';
+      recognition.continuous = true;    // 긴 침묵에도 자동 종료 방지
+      recognition.interimResults = true; // 중간 결과 실시간 표시
+
+      // onstart: UI만 갱신, 버퍼는 절대 초기화하지 않음
       recognition.onstart = function() {
         isRecording = true;
         voiceBtn.classList.add('recording');
         voiceBtnLabel.textContent = '🛑 녹음 중단';
         voiceStatus.classList.add('visible');
-        transcriptBox.classList.remove('visible');
-        voiceSubmitBtn.style.display = 'none';
-        hideError();
       };
 
+      // onresult: e.resultIndex부터만 순회 → 이미 확정된 구간 재처리 방지
       recognition.onresult = function(e) {
         var interim = '';
-        var final = '';
+        // e.resultIndex = 이번 이벤트에서 새로 추가된 첫 번째 결과 인덱스
         for (var i = e.resultIndex; i < e.results.length; i++) {
           var t = e.results[i][0].transcript;
-          if (e.results[i].isFinal) { final += t; } else { interim += t; }
+          if (e.results[i].isFinal) {
+            // 확정된 구간만 영구 버퍼에 추가 (한 번만)
+            voiceTranscript += t;
+          } else {
+            // 미확정 구간은 임시 표시용으로만 사용
+            interim += t;
+          }
         }
-        if (final) voiceTranscript += final;
+        // 화면: 확정 텍스트 + 현재 중간 텍스트
         transcriptText.textContent = voiceTranscript + interim;
         transcriptBox.classList.add('visible');
       };
 
       recognition.onerror = function(e) {
+        // no-speech는 침묵 감지 — 오류 표시 없이 조용히 재시작
+        if (e.error === 'no-speech') { return; }
         var msg = '음성 인식 오류가 발생했습니다.';
         if (e.error === 'not-allowed') msg = '🎤 마이크 권한이 필요합니다.\n브라우저 설정에서 마이크를 허용해 주세요.';
-        else if (e.error === 'no-speech') msg = '🔇 음성이 감지되지 않았습니다. 다시 시도해 주세요.';
         else if (e.error === 'network') msg = '📡 네트워크 오류가 발생했습니다.';
         showError(msg);
+        isManualStop = true; // 오류 시엔 재시작 안 함
         stopVoice(false);
       };
 
+      // onend: 사용자가 명시적으로 멈추지 않았으면 자동 재시작
       recognition.onend = function() {
-        if (isRecording) {
-          isRecording = false;
-          voiceBtn.classList.remove('recording');
-          voiceBtnLabel.textContent = '🎙️ 음성으로 말하기';
-          voiceStatus.classList.remove('visible');
-          if (voiceTranscript.trim()) { voiceSubmitBtn.style.display = 'flex'; }
+        if (!isManualStop && isRecording) {
+          // 브라우저가 자체 종료했을 때 (침묵 타임아웃 등) → 재시작
+          // voiceTranscript 버퍼는 그대로 유지
+          try { _startRecognition(); } catch(e) { /* 재시작 실패 시 무시 */ }
+          return;
         }
+        // 명시적 정지 or 이미 isRecording=false → 정지 처리
+        isRecording = false;
+        voiceBtn.classList.remove('recording');
+        voiceBtnLabel.textContent = '🎙️ 음성으로 말하기';
+        voiceStatus.classList.remove('visible');
+        if (voiceTranscript.trim()) { voiceSubmitBtn.style.display = 'flex'; }
       };
 
       recognition.start();
@@ -907,8 +934,9 @@
 
     function stopVoice(showSubmit) {
       if (showSubmit === undefined) showSubmit = true;
+      isManualStop = true;   // 명시적 정지 → onend에서 재시작 안 함
+      isRecording  = false;
       if (recognition) {
-        isRecording = false;
         recognition.stop();
         recognition = null;
       }
