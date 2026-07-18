@@ -739,10 +739,15 @@
         <div class="transcript-text" id="transcriptText"></div>
       </div>
 
-      <!-- 음성 완료 후 전송 버튼 -->
-      <button class="submit-btn" id="voiceSubmitBtn" style="display:none; margin-top:14px;" onclick="submitFromVoice()">
-        🚀 서류 만들기
-      </button>
+      <!-- 음성 완료 후 액션 버튼 -->
+      <div id="voiceActionBtns" style="display:none; margin-top:14px; gap: 10px; flex-direction: row;">
+        <button class="submit-btn" id="voiceSubmitBtn" style="flex: 1; margin: 0;" onclick="submitFromVoice()">
+          📤 서류 만들기
+        </button>
+        <button class="submit-btn" id="voiceRetryBtn" style="flex: 1; margin: 0; background: #555; color: #fff; border: 2px solid #555;" onclick="resetVoice()">
+          🔄 다시 녹음하기
+        </button>
+      </div>
 
       <!-- 텍스트 입력 패널 -->
       <div class="input-panel" id="inputPanel" style="margin-top:14px;">
@@ -822,6 +827,8 @@
     var isRecording     = false;
     var recordStartTime = 0;      // 녹음 시작 타임스탬프
     var recTimerID      = null;   // 녹음 시간 표시 타이머
+    var pendingAudioBase64 = null; // 전송 대기 중인 오디오 데이터
+    var pendingAudioMimeType = null;
     var lastPayload     = null;   // 재시도용 마지막 페이로드
     var currentResult   = '';
     var textPanelOpen   = false;
@@ -840,7 +847,7 @@
     var transcriptBox   = document.getElementById('transcriptBox');
     var transcriptLabel = document.getElementById('transcriptLabel');
     var transcriptText  = document.getElementById('transcriptText');
-    var voiceSubmitBtn  = document.getElementById('voiceSubmitBtn');
+    var voiceActionBtns = document.getElementById('voiceActionBtns');
     var inputPanel      = document.getElementById('inputPanel');
     var loadingOverlay  = document.getElementById('loadingOverlay');
     var errorBox        = document.getElementById('errorBox');
@@ -894,7 +901,9 @@
       hideResult();
       hideError();
       transcriptBox.classList.remove('visible');
-      voiceSubmitBtn.style.display = 'none';
+      if (voiceActionBtns) voiceActionBtns.style.display = 'none';
+      pendingAudioBase64 = null;
+      pendingAudioMimeType = null;
 
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         isListening = false;
@@ -950,16 +959,17 @@
 
             // 녹음 완료 상태 표시
             transcriptLabel.textContent = '🎤 녹음 완료';
-            transcriptText.textContent  = '⏱️ ' + recSec + '초 녹음 — 서류를 생성하는 중입니다...';
+            transcriptText.textContent  = '🎙️ 음성 녹음 완료 (' + recSec + '초)';
             transcriptBox.classList.add('visible');
 
-            // base64 변환 후 자동 전송
+            // base64 변환 후 대기 (전송 버튼 활성화)
             var blob   = new Blob(audioChunks, { type: cleanMimeType });
             var reader = new FileReader();
             reader.onloadend = function() {
               var dataUrl = reader.result;           // "data:audio/webm;base64,AAAA..."
-              var base64  = dataUrl.split(',')[1];   // data: 접두사 제거
-              sendAudioToWebhook(base64, cleanMimeType);
+              pendingAudioBase64 = dataUrl.split(',')[1];   // data: 접두사 제거
+              pendingAudioMimeType = cleanMimeType;
+              if (voiceActionBtns) voiceActionBtns.style.display = 'flex';
             };
             reader.readAsDataURL(blob);
           };
@@ -969,14 +979,14 @@
 
           // 녹음 중 UI
           voiceBtn.classList.add('recording');
-          voiceBtnLabel.textContent = '🔴 녹음 중... (떼면 전송)';
+          voiceBtnLabel.textContent = '🔴 녹음 중... (떼면 완료)';
           voiceStatus.classList.add('visible');
 
           // 녹음 시간 카운터
           if (recTimerID) clearInterval(recTimerID);
           recTimerID = setInterval(function() {
             var elapsed = Math.round((Date.now() - recordStartTime) / 1000);
-            if(voiceStatusText) voiceStatusText.textContent = '🎤 녹음 중 ' + elapsed + '초... (손 떼면 전송)';
+            if(voiceStatusText) voiceStatusText.textContent = '🎤 녹음 중 ' + elapsed + '초... (손 떼면 완료)';
           }, 1000);
         })
         .catch(function(err) {
@@ -1000,7 +1010,7 @@
 
       if (recTimerID) { clearInterval(recTimerID); recTimerID = null; }
       voiceStatus.classList.remove('visible');
-      if (voiceStatusText) voiceStatusText.textContent = '🎤 녹음 중... 손 떼면 전송합니다';
+      if (voiceStatusText) voiceStatusText.textContent = '🎤 녹음 중... 손 떼면 완료합니다';
 
       if (mediaRecorder && mediaRecorder.state !== 'inactive') {
         try { mediaRecorder.stop(); } catch(ex) {}
@@ -1018,8 +1028,24 @@
     // ── 녹음 UI 리셋 ──
     function _resetVoiceUI() {
       voiceBtn.classList.remove('recording');
-      voiceBtnLabel.textContent = '누르고 말하기 (떼면 전송)';
+      voiceBtnLabel.textContent = '누르고 말하기 (떼면 완료)';
       voiceStatus.classList.remove('visible');
+    }
+
+    // ── 명시적 전송 / 다시 녹음 ──
+    function submitFromVoice() {
+      if (!pendingAudioBase64) return;
+      if (voiceActionBtns) voiceActionBtns.style.display = 'none';
+      sendAudioToWebhook(pendingAudioBase64, pendingAudioMimeType);
+    }
+
+    function resetVoice() {
+      pendingAudioBase64 = null;
+      pendingAudioMimeType = null;
+      audioChunks = [];
+      transcriptBox.classList.remove('visible');
+      if (voiceActionBtns) voiceActionBtns.style.display = 'none';
+      _resetVoiceUI();
     }
 
     // ── 오디오 전송 ──
@@ -1212,7 +1238,9 @@
       transcriptBox.classList.remove('visible');
       if (transcriptLabel) transcriptLabel.textContent = '🎤 녹음 완료';
       transcriptText.textContent   = '';
-      voiceSubmitBtn.style.display = 'none';
+      if (voiceActionBtns) voiceActionBtns.style.display = 'none';
+      pendingAudioBase64 = null;
+      pendingAudioMimeType = null;
       inputPanel.classList.remove('visible');
       document.getElementById('userText').value = '';
       hideResult();
