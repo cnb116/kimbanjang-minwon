@@ -160,6 +160,13 @@
       transition: all 0.18s ease;
       -webkit-tap-highlight-color: transparent;
       letter-spacing: -0.3px;
+      
+      /* 모바일 길게 누르기(Long press), 드래그 방지 */
+      touch-action: none;
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-user-drag: none;
     }
 
     .big-btn:active {
@@ -818,6 +825,9 @@
     var lastPayload     = null;   // 재시도용 마지막 페이로드
     var currentResult   = '';
     var textPanelOpen   = false;
+    
+    // 디버깅용 타이머
+    var debugPointerDownTime = 0;
 
     var WEBHOOK_URL = 'https://hook.eu2.make.com/2nk17hsfq47rcquqsdos24ewlia339nv';
     var TIMEOUT_MS  = 50000;   // 50초 타임아웃
@@ -849,6 +859,8 @@
 
     // ── Pointer Events: pointerdown 시작 / pointerup·pointercancel 종료 ──
     voiceBtn.addEventListener('pointerdown', function(e) {
+      debugPointerDownTime = Date.now();
+      console.log('[Pointer] pointerdown 발생:', debugPointerDownTime);
       e.preventDefault();
       if (isListening) { return; }             // 이중 시작 차단
       voiceBtn.setPointerCapture(e.pointerId); // 손떨림 안정성
@@ -856,6 +868,7 @@
     });
 
     voiceBtn.addEventListener('pointerup', function(e) {
+      console.log('[Pointer] pointerup 발생! 유지 시간(ms):', Date.now() - debugPointerDownTime);
       e.preventDefault();
       if (voiceBtn.hasPointerCapture(e.pointerId)) {
         voiceBtn.releasePointerCapture(e.pointerId);
@@ -864,6 +877,7 @@
     });
 
     voiceBtn.addEventListener('pointercancel', function(e) {
+      console.error('[Pointer] pointercancel 발생! 유지 시간(ms):', Date.now() - debugPointerDownTime, '(브라우저가 제스처를 가로챔)');
       stopRecording();
     });
 
