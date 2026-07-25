@@ -192,6 +192,12 @@
       animation: pulse-btn 1.2s ease-in-out infinite;
     }
 
+    .btn-voice.paused {
+      background: linear-gradient(135deg, #FF9800 0%, #F57C00 100%);
+      color: #fff;
+      box-shadow: 0 4px 24px rgba(255,152,0,0.4), 0 2px 8px rgba(0,0,0,0.3);
+    }
+
     @keyframes pulse-btn {
       0%, 100% { box-shadow: 0 4px 24px rgba(255,68,68,0.5), 0 0 0 0 rgba(255,68,68,0.4); }
       50% { box-shadow: 0 6px 32px rgba(255,68,68,0.7), 0 0 0 12px rgba(255,68,68,0); }
@@ -389,6 +395,8 @@
       line-height: 1.6;
       font-weight: 400;
       word-break: break-all;
+      max-height: 160px;
+      overflow-y: auto;
     }
 
     /* LOADING */
@@ -714,14 +722,17 @@
       <div class="btn-group">
         <!-- 1. 음성 버튼 -->
         <button class="big-btn btn-voice" id="voiceBtn">
-          <span class="btn-icon">🎙️</span>
-          <span id="voiceBtnLabel">음성으로 말하기</span>
+          <span id="voiceBtnLabel" style="width:100%; text-align:center; font-size:22px;">🎙️ 눌러서 말하기 시작</span>
+        </button>
+        <div id="voiceHintText" style="display:none; text-align:center; font-size:14px; color:var(--text-dim); margin-top:-4px; margin-bottom:4px;">말이 끊겨도 눌러서 계속 이어가시면 됩니다</div>
+        <button id="voiceForceResetBtn" style="width:100%; min-height:50px; border:2px solid #555; background:transparent; color:#888; font-size:18px; font-weight:700; border-radius:12px; margin-top:8px; cursor:pointer;" onclick="forceResetVoice()">
+          🔄 처음부터 다시
         </button>
 
         <!-- 2. 텍스트 버튼 -->
         <button class="big-btn btn-text" id="textBtn" onclick="toggleTextInput()">
           <span class="btn-icon">⌨️</span>
-          <span>텍스트로 입력</span>
+          <span>텍스트로 입력 (가장 안정적)</span>
         </button>
       </div>
 
@@ -740,30 +751,33 @@
       </div>
 
       <!-- 음성 완료 후 액션 버튼 -->
-      <div id="voiceActionBtns" style="display:none; margin-top:14px; gap: 10px; flex-direction: row;">
-        <button class="submit-btn" id="voiceSubmitBtn" style="flex: 1; margin: 0;" onclick="submitFromVoice()">
+      <div id="voiceActionBtns" style="display:none; margin-top:14px;">
+        <button class="submit-btn" id="voiceSubmitBtn" style="width: 100%; margin: 0;" onclick="submitFromVoice()">
           📤 서류 만들기
-        </button>
-        <button class="submit-btn" id="voiceRetryBtn" style="flex: 1; margin: 0; background: #555; color: #fff; border: 2px solid #555;" onclick="resetVoice()">
-          🔄 다시 녹음하기
         </button>
       </div>
 
       <!-- 텍스트 입력 패널 -->
       <div class="input-panel" id="inputPanel" style="margin-top:14px;">
         <label class="input-label" for="userText">📋 민원 내용을 입력하세요</label>
+        <div id="transcriptConfirmMsg" style="display:none; color:var(--yellow); font-size:15px; font-weight:700; margin-bottom:4px;">💡 이 내용이 맞으면 아래 서류 만들기를 눌러주세요</div>
         <textarea id="userText" placeholder="예시) 우리 아파트 윗집에서 매일 밤 11시 이후에 뛰어다니는 소리가 들립니다. 층간소음 민원 서류를 작성해주세요."></textarea>
-        <button class="submit-btn" onclick="submitText()">
-          🚀 서류 만들기
-        </button>
+        <div style="display:flex; gap:10px; flex-direction:row;">
+          <button class="submit-btn" style="flex: 1;" onclick="submitText()">
+            🚀 서류 만들기
+          </button>
+          <button class="submit-btn" id="textResetBtn" style="flex: 1; background: #555; color: #fff; border: 2px solid #555; display:none; font-size: 18px;" onclick="resetAll()">
+            🔄 처음부터 다시 녹음
+          </button>
+        </div>
       </div>
     </div>
 
     <!-- 로딩 -->
     <div class="loading-overlay" id="loadingOverlay">
       <div class="spinner"></div>
-      <div class="loading-text">서류 타설 중입니더... 🏗️</div>
-      <div style="font-size:15px; color:#888; text-align:center; margin-top:-8px;">최대 50초 정도 걸릴 수 있어요</div>
+      <div class="loading-text" id="loadingText">서류 타설 중입니더... 🏗️</div>
+      <div id="loadingSubText" style="font-size:15px; color:#888; text-align:center; margin-top:-8px;">최대 50초 정도 걸릴 수 있어요</div>
     </div>
 
     <!-- 인라인 에러 (음성/입력) -->
@@ -777,6 +791,9 @@
       <div class="fail-btn-group">
         <button class="fail-retry-btn" id="failRetryBtn" onclick="retryWebhook()">
           🔁 다시 시도
+        </button>
+        <button class="fail-retry-btn" id="failTextBtn" style="border-color:#888; color:#bbb; min-height: 60px; display: none;" onclick="switchToTextFromFail()">
+          ⌨️ 텍스트로 바로 입력하기
         </button>
         <button class="fail-reset-btn" onclick="resetAll()">
           🔄 처음부터 다시
@@ -820,23 +837,14 @@
     </p>
   <script>
     // ── 상태 변수 ──
-    var mediaRecorder   = null;   // MediaRecorder 인스턴스
-    var audioChunks     = [];     // 녹음 청크 누적
-    var audioStream     = null;   // 마이크 스트림
-    var isListening     = false;  // 이중 시작 방지 가드
-    var isRecording     = false;
-    var recordStartTime = 0;      // 녹음 시작 타임스탬프
-    var recTimerID      = null;   // 녹음 시간 표시 타이머
-    var pendingAudioBase64 = null; // 전송 대기 중인 오디오 데이터
-    var pendingAudioMimeType = null;
+    var isListening     = false;
+    var recognition     = null;
+    var finalText       = '';
     var lastPayload     = null;   // 재시도용 마지막 페이로드
     var currentResult   = '';
     var textPanelOpen   = false;
-    
-    // 디버깅용 타이머
-    var debugPointerDownTime = 0;
 
-    var WEBHOOK_URL = 'https://hook.eu2.make.com/2nk17hsfq47rcquqsdos24ewlia339nv';
+    var WEBHOOK_URL = '/api/generate';
     var TIMEOUT_MS  = 50000;   // 50초 타임아웃
 
     // ── DOM 레퍼런스 ──
@@ -862,196 +870,137 @@
     var resetBtn        = document.getElementById('resetBtn');
 
     // ── 버튼 초기 텍스트 ──
-    voiceBtnLabel.textContent = '누르고 말하기 (떼면 전송)';
+    _updateVoiceUI();
 
-    // ── Pointer Events: pointerdown 시작 / pointerup·pointercancel 종료 ──
-    voiceBtn.addEventListener('pointerdown', function(e) {
-      debugPointerDownTime = Date.now();
-      console.log('[Pointer] pointerdown 발생:', debugPointerDownTime);
-      e.preventDefault();
-      if (isListening) { return; }             // 이중 시작 차단
-      voiceBtn.setPointerCapture(e.pointerId); // 손떨림 안정성
-      startRecording();
-    });
+    // ── SpeechRecognition 초기화 ──
+    var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      recognition = new SpeechRecognition();
+      recognition.continuous = false; // changed from true
+      recognition.interimResults = true;
+      recognition.lang = 'ko-KR';
 
-    voiceBtn.addEventListener('pointerup', function(e) {
-      console.log('[Pointer] pointerup 발생! 유지 시간(ms):', Date.now() - debugPointerDownTime);
-      e.preventDefault();
-      if (voiceBtn.hasPointerCapture(e.pointerId)) {
-        voiceBtn.releasePointerCapture(e.pointerId);
-      }
-      stopRecording();
-    });
+      recognition.onresult = function(event) {
+        var results = event.results;
+        var lastResult = results[results.length - 1];
+        var interimTranscript = '';
 
-    voiceBtn.addEventListener('pointercancel', function(e) {
-      console.error('[Pointer] pointercancel 발생! 유지 시간(ms):', Date.now() - debugPointerDownTime, '(브라우저가 제스처를 가로챔)');
-      stopRecording();
-    });
+        if (lastResult.isFinal) {
+          var transcript = lastResult[0].transcript.trim();
+          if (transcript) {
+            var trimmedPrev = finalText.trim();
+            if (!trimmedPrev.endsWith(transcript)) {
+               finalText += (finalText.length > 0 ? ' ' : '') + transcript;
+            }
+          }
+        } else {
+          for (var i = 0; i < results.length; i++) {
+             if (!results[i].isFinal) interimTranscript += results[i][0].transcript;
+          }
+        }
+        
+        transcriptBox.classList.add('visible');
+        transcriptLabel.textContent = '🎤 인식 중...';
+        transcriptText.innerHTML = finalText + (interimTranscript ? '<span style="color:#aaa;"> ' + interimTranscript + '</span>' : '');
+        transcriptText.scrollTop = transcriptText.scrollHeight;
+      };
 
-    // ── 녹음 시작 ──
-    function startRecording() {
-      if (isListening) { return; }
-      isListening = true;
-      isRecording = true;
-
-      if (textPanelOpen) {
-        inputPanel.classList.remove('visible');
-        textPanelOpen = false;
-      }
-      hideResult();
-      hideError();
-      transcriptBox.classList.remove('visible');
-      if (voiceActionBtns) voiceActionBtns.style.display = 'none';
-      pendingAudioBase64 = null;
-      pendingAudioMimeType = null;
-
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      recognition.onend = function() {
         isListening = false;
-        isRecording = false;
-        showError('이 브라우저는 마이크 녹음을 지원하지 않습니다.\n크롬(Chrome) 브라우저를 사용해 주세요.');
-        return;
-      }
-
-      navigator.mediaDevices.getUserMedia({ audio: true })
-        .then(function(stream) {
-          // 버튼을 누르자마자 바로 뗀 경우
-          if (!isListening) {
-            stream.getTracks().forEach(function(t) { t.stop(); });
-            return;
-          }
-
-          audioStream = stream;
-          audioChunks = [];
-
-          // 안드로이드 크롬에서 지원하는 mimeType 선택
-          var mimeType = 'audio/webm';
-          if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) mimeType = 'audio/webm;codecs=opus';
-          else if (MediaRecorder.isTypeSupported('audio/webm')) mimeType = 'audio/webm';
-          else if (MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')) mimeType = 'audio/ogg;codecs=opus';
-          else if (MediaRecorder.isTypeSupported('audio/mp4')) mimeType = 'audio/mp4';
-
-          mediaRecorder = new MediaRecorder(stream, { mimeType: mimeType });
-
-          mediaRecorder.ondataavailable = function(e) {
-            if (e.data && e.data.size > 0) { audioChunks.push(e.data); }
-          };
-
-          mediaRecorder.onstop = function() {
-            // 스트림 정리
-            if (audioStream) {
-              audioStream.getTracks().forEach(function(t) { t.stop(); });
-              audioStream = null;
-            }
-
-            var recSec     = Math.round((Date.now() - recordStartTime) / 1000);
-            var actualMime = (mediaRecorder && mediaRecorder.mimeType) ? mediaRecorder.mimeType : mimeType;
-            
-            // 코덱 정보가 포함된 경우 세미콜론 이전 부분만 추출 (Gemini API 호환성)
-            var cleanMimeType = actualMime.split(';')[0]; 
-
-            // UI 정리
-            _resetVoiceUI();
-
-            if (audioChunks.length === 0) {
-              showError('🔇 녹음된 소리가 없습니다. 다시 눌러서 말씀해 주세요.');
-              return;
-            }
-
-            // 녹음 완료 상태 표시
-            transcriptLabel.textContent = '🎤 녹음 완료';
-            transcriptText.textContent  = '🎙️ 음성 녹음 완료 (' + recSec + '초)';
-            transcriptBox.classList.add('visible');
-
-            // base64 변환 후 대기 (전송 버튼 활성화)
-            var blob   = new Blob(audioChunks, { type: cleanMimeType });
-            var reader = new FileReader();
-            reader.onloadend = function() {
-              var dataUrl = reader.result;           // "data:audio/webm;base64,AAAA..."
-              pendingAudioBase64 = dataUrl.split(',')[1];   // data: 접두사 제거
-              pendingAudioMimeType = cleanMimeType;
-              if (voiceActionBtns) voiceActionBtns.style.display = 'flex';
-            };
-            reader.readAsDataURL(blob);
-          };
-
-          mediaRecorder.start(100); // 100ms 청크마다 ondataavailable 호출
-          recordStartTime = Date.now();
-
-          // 녹음 중 UI
-          voiceBtn.classList.add('recording');
-          voiceBtnLabel.textContent = '🔴 녹음 중... (떼면 완료)';
-          voiceStatus.classList.add('visible');
-
-          // 녹음 시간 카운터
-          if (recTimerID) clearInterval(recTimerID);
-          recTimerID = setInterval(function() {
-            var elapsed = Math.round((Date.now() - recordStartTime) / 1000);
-            if(voiceStatusText) voiceStatusText.textContent = '🎤 녹음 중 ' + elapsed + '초... (손 떼면 완료)';
-          }, 1000);
-        })
-        .catch(function(err) {
+        _updateVoiceUI();
+      };
+      
+      recognition.onerror = function(event) {
+        console.error("Speech recognition error", event.error);
+        if (event.error === 'not-allowed') {
+          showError('🎤 마이크 권한이 거부되었습니다.');
           isListening = false;
-          isRecording = false;
-          var msg = '🎤 마이크 접근에 실패했습니다.';
-          if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-            msg = '🎤 마이크 권한이 거부되었습니다.\n브라우저 주소창 우측 아이콘에서 마이크를 허용해 주세요.';
-          } else if (err.name === 'NotFoundError') {
-            msg = '🎤 사용 가능한 마이크를 찾지 못했습니다.';
-          }
-          showError(msg);
-        });
+          _updateVoiceUI();
+        }
+      };
     }
 
-    // ── 녹음 중지 ──
-    function stopRecording() {
-      if (!isListening) { return; }
-      isListening = false; // 즉시 false → 재진입 차단
-      isRecording = false;
-
-      if (recTimerID) { clearInterval(recTimerID); recTimerID = null; }
-      voiceStatus.classList.remove('visible');
-      if (voiceStatusText) voiceStatusText.textContent = '🎤 녹음 중... 손 떼면 완료합니다';
-
-      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-        try { mediaRecorder.stop(); } catch(ex) {}
-        // onstop에서 후처리
+    // ── 버튼 클릭 이벤트 (pointerup 하나로 통일) ──
+    function toggleListening() {
+      if (!recognition) {
+        showError('이 브라우저는 음성 인식을 지원하지 않습니다. 크롬(Chrome)을 사용해주세요.');
+        return;
+      }
+      if (isListening) {
+        try { recognition.stop(); } catch(ex) {}
+        isListening = false;
       } else {
-        // 마이크 획득 전 뗀 경우: 그냥 UI 정리
-        _resetVoiceUI();
-        if (audioStream) {
-          audioStream.getTracks().forEach(function(t) { t.stop(); });
-          audioStream = null;
+        try { recognition.start(); } catch(ex) {}
+        isListening = true;
+        
+        hideError();
+        hideResult();
+        if (textPanelOpen) {
+          inputPanel.classList.remove('visible');
+          textPanelOpen = false;
+        }
+      }
+      _updateVoiceUI();
+    }
+
+    voiceBtn.addEventListener('pointerup', function(e) {
+      e.preventDefault();
+      toggleListening();
+    });
+
+    // ── 음성 UI 업데이트 ──
+    function _updateVoiceUI() {
+      voiceBtn.classList.remove('recording', 'paused');
+      voiceStatus.classList.remove('visible');
+      var voiceHintText = document.getElementById('voiceHintText');
+      if (voiceHintText) voiceHintText.style.display = 'none';
+
+      if (isListening) {
+        voiceBtn.classList.add('recording');
+        voiceBtnLabel.textContent = '🔴 듣는 중... (누르면 정지)';
+        voiceStatus.classList.add('visible');
+        if (voiceStatusText) voiceStatusText.textContent = '🎤 듣고 있습니다...';
+        if (voiceActionBtns) voiceActionBtns.style.display = 'none';
+      } else {
+        voiceBtnLabel.textContent = finalText ? '🎙️ 눌러서 이어 말하기' : '🎙️ 눌러서 말하기 시작';
+        if (voiceHintText && finalText) voiceHintText.style.display = 'block';
+
+        if (finalText) {
+          transcriptBox.classList.add('visible');
+          transcriptLabel.textContent = '🎤 녹음 완료';
+          transcriptText.textContent = finalText;
+          if (voiceActionBtns) voiceActionBtns.style.display = 'flex';
+        } else {
+          transcriptBox.classList.remove('visible');
+          transcriptText.textContent = '';
+          if (voiceActionBtns) voiceActionBtns.style.display = 'none';
         }
       }
     }
 
-    // ── 녹음 UI 리셋 ──
-    function _resetVoiceUI() {
-      voiceBtn.classList.remove('recording');
-      voiceBtnLabel.textContent = '누르고 말하기 (떼면 완료)';
-      voiceStatus.classList.remove('visible');
-    }
-
     // ── 명시적 전송 / 다시 녹음 ──
     function submitFromVoice() {
-      if (!pendingAudioBase64) return;
+      var text = finalText.trim();
+      if (!text) {
+        showError('🎤 인식된 내용이 없습니다.');
+        return;
+      }
       if (voiceActionBtns) voiceActionBtns.style.display = 'none';
-      sendAudioToWebhook(pendingAudioBase64, pendingAudioMimeType);
+      lastPayload = { text: text };
+      _doWebhookRequest(lastPayload);
+    }
+
+    function forceResetVoice() {
+      if (recognition && isListening) {
+        try { recognition.abort(); } catch(ex) {}
+      }
+      isListening = false;
+      finalText = '';
+      _updateVoiceUI();
     }
 
     function resetVoice() {
-      pendingAudioBase64 = null;
-      pendingAudioMimeType = null;
-      audioChunks = [];
-      transcriptBox.classList.remove('visible');
-      if (voiceActionBtns) voiceActionBtns.style.display = 'none';
-      _resetVoiceUI();
-    }
-
-    // ── 오디오 전송 ──
-    function sendAudioToWebhook(base64, mimeType) {
-      lastPayload = { audio: base64, mimeType: mimeType };
-      _doWebhookRequest(lastPayload);
+      forceResetVoice();
     }
 
     // ── 텍스트 입력 제출 ──
@@ -1067,6 +1016,12 @@
 
     // ── 웹훅 요청 공통 로직 ──
     function _doWebhookRequest(payload) {
+      var loadingTextEl = document.getElementById('loadingText');
+      var loadingSubEl = document.getElementById('loadingSubText');
+      
+      loadingTextEl.innerHTML = '서류 타설 중입니더... 🏗️';
+      if (loadingSubEl) loadingSubEl.style.display = 'block';
+
       loadingOverlay.classList.add('visible');
       hideError();
       hideFailPanel();
@@ -1093,7 +1048,11 @@
       })
       .then(function(data) {
         if (String(data.success) === 'true') {
-          showResult(data.document || '');
+          if (data.transcript) {
+            showTranscriptReady(data.transcript);
+          } else {
+            showResult(data.document || '');
+          }
         } else {
           var err = new Error(data.message || '서버가 실패 응답을 반환했습니다.');
           err.type = 'server';
@@ -1104,15 +1063,22 @@
         clearTimeout(timeoutId);
         var title = '서류 타설에 실패했습니다.<br>잠시 후 다시 시도해주세요.';
         var sub   = '';
-        if (err.name === 'AbortError') {
-          title = '요청 시간이 초과됐습니다. (50초)<br>다시 시도해주세요.';
-          sub   = '서버 응답이 너무 늦거나 네트워크가 느릴 수 있습니다.';
-        } else if (err.type === 'server') {
-          title = '서버에서 오류가 발생했습니다.<br>잠시 후 다시 시도해주세요.';
-          sub   = err.status ? '오류 코드: HTTP ' + err.status : err.message;
+        
+        var failTextBtn = document.getElementById('failTextBtn');
+        if (failTextBtn) failTextBtn.style.display = 'none';
+
+        if (false) {
         } else {
-          title = '네트워크 연결을 확인해주세요.<br>인터넷이 끊겼을 수 있습니다.';
-          sub   = '연결 복구 후 다시 시도해주세요.';
+          if (err.name === 'AbortError') {
+            title = '요청 시간이 초과됐습니다. (50초)<br>다시 시도해주세요.';
+            sub   = '서버 응답이 너무 늦거나 네트워크가 느릴 수 있습니다.';
+          } else if (err.type === 'server') {
+            title = '서버에서 오류가 발생했습니다.<br>잠시 후 다시 시도해주세요.';
+            sub   = err.status ? '오류 코드: HTTP ' + err.status : err.message;
+          } else {
+            title = '네트워크 연결을 확인해주세요.<br>인터넷이 끊겼을 수 있습니다.';
+            sub   = '연결 복구 후 다시 시도해주세요.';
+          }
         }
         showFailPanel(title, sub);
       })
@@ -1128,12 +1094,57 @@
       _doWebhookRequest(lastPayload);
     }
 
+    function switchToTextFromFail() {
+      hideFailPanel();
+      if (voiceState === 'recording') {
+        isManualStop = true;
+        try { recognition.stop(); } catch(ex) {}
+      }
+      hideResult();
+      textPanelOpen = true;
+      
+      var confirmMsg = document.getElementById('transcriptConfirmMsg');
+      var resetBtn = document.getElementById('textResetBtn');
+      if (confirmMsg) confirmMsg.style.display = 'none';
+      if (resetBtn) resetBtn.style.display = 'none';
+      
+      inputPanel.classList.add('visible');
+      setTimeout(function() { document.getElementById('userText').focus(); }, 100);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // ── 변환된 텍스트 확인(1차) ──
+    function showTranscriptReady(transcript) {
+      transcriptBox.classList.remove('visible'); 
+      if (voiceActionBtns) voiceActionBtns.style.display = 'none';
+      
+      var userText = document.getElementById('userText');
+      userText.value = transcript;
+      
+      var confirmMsg = document.getElementById('transcriptConfirmMsg');
+      var resetBtn = document.getElementById('textResetBtn');
+      if (confirmMsg) confirmMsg.style.display = 'block';
+      if (resetBtn) resetBtn.style.display = 'flex';
+      
+      inputPanel.classList.add('visible');
+      textPanelOpen = true;
+      
+      setTimeout(function() { userText.focus(); }, 100);
+    }
+
     // ── 텍스트 입력 토글 ──
     function toggleTextInput() {
-      if (isRecording) stopRecording();
+      if (voiceState === 'recording') {
+        isManualStop = true;
+        try { recognition.stop(); } catch(ex) {}
+      }
       hideResult();
       textPanelOpen = !textPanelOpen;
       if (textPanelOpen) {
+        var confirmMsg = document.getElementById('transcriptConfirmMsg');
+        var resetBtn = document.getElementById('textResetBtn');
+        if (confirmMsg) confirmMsg.style.display = 'none';
+        if (resetBtn) resetBtn.style.display = 'none';
         inputPanel.classList.add('visible');
         setTimeout(function() { document.getElementById('userText').focus(); }, 100);
       } else {
@@ -1216,31 +1227,16 @@
 
     // ── 전체 리셋 ──
     function resetAll() {
-      if (isListening) stopRecording();
+      if (recognition && isListening) {
+        try { recognition.abort(); } catch(ex) {}
+      }
       isListening   = false;
-      isRecording   = false;
+      finalText     = '';
       lastPayload   = null;
       currentResult = '';
       textPanelOpen = false;
 
-      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-        try { mediaRecorder.stop(); } catch(ex) {}
-      }
-      mediaRecorder = null;
-      audioChunks   = [];
-      if (audioStream) {
-        audioStream.getTracks().forEach(function(t) { t.stop(); });
-        audioStream = null;
-      }
-      if (recTimerID) { clearInterval(recTimerID); recTimerID = null; }
-
-      _resetVoiceUI();
-      transcriptBox.classList.remove('visible');
-      if (transcriptLabel) transcriptLabel.textContent = '🎤 녹음 완료';
-      transcriptText.textContent   = '';
-      if (voiceActionBtns) voiceActionBtns.style.display = 'none';
-      pendingAudioBase64 = null;
-      pendingAudioMimeType = null;
+      _updateVoiceUI();
       inputPanel.classList.remove('visible');
       document.getElementById('userText').value = '';
       hideResult();
