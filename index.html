@@ -719,7 +719,38 @@
     <!-- 입력 카드 -->
     <div class="card" id="inputCard">
       <div class="section-title">🗣️ 상황을 설명해 주세요</div>
-      <div class="btn-group">
+
+      <!-- 음성 녹음 상태 (상단 - 말하는 동안 실시간 확인) -->
+      <div class="voice-status" id="voiceStatus" style="margin-top:4px;">
+        <div class="mic-wave">
+          <span></span><span></span><span></span><span></span><span></span>
+        </div>
+        <span class="voice-status-text" id="voiceStatusText">🎤 녹음 중... 손 떼면 전송합니다</span>
+      </div>
+
+      <!-- 녹음 완료 상태 표시 (상단) -->
+      <div class="transcript-box" id="transcriptBox" style="margin-top:12px;">
+        <div class="transcript-label" id="transcriptLabel">🎤 녹음 완료</div>
+        <div class="transcript-text" id="transcriptText"></div>
+      </div>
+
+      <!-- 텍스트 입력 패널 (상단) -->
+      <div class="input-panel" id="inputPanel" style="margin-top:14px;">
+        <label class="input-label" for="userText">📋 민원 내용을 입력하세요</label>
+        <div id="transcriptConfirmMsg" style="display:none; color:var(--yellow); font-size:15px; font-weight:700; margin-bottom:4px;">💡 이 내용이 맞으면 아래 서류 만들기를 눌러주세요</div>
+        <textarea id="userText" placeholder="예시) 우리 아파트 윗집에서 매일 밤 11시 이후에 뛰어다니는 소리가 들립니다. 층간소음 민원 서류를 작성해주세요."></textarea>
+        <div style="display:flex; gap:10px; flex-direction:row;">
+          <button class="submit-btn" style="flex: 1;" onclick="submitText()">
+            🚀 서류 만들기
+          </button>
+          <button class="submit-btn" id="textResetBtn" style="flex: 1; background: #555; color: #fff; border: 2px solid #555; display:none; font-size: 18px;" onclick="resetAll()">
+            🔄 처음부터 다시 녹음
+          </button>
+        </div>
+      </div>
+
+      <!-- 버튼 그룹 (하단 - 텍스트 확인 후 조작) -->
+      <div class="btn-group" style="margin-top:14px;">
         <!-- 1. 음성 버튼 -->
         <button class="big-btn btn-voice" id="voiceBtn">
           <span id="voiceBtnLabel" style="width:100%; text-align:center; font-size:22px;">🎙️ 눌러서 말하기 시작</span>
@@ -736,41 +767,13 @@
         </button>
       </div>
 
-      <!-- 음성 녹음 상태 -->
-      <div class="voice-status" id="voiceStatus" style="margin-top:14px;">
-        <div class="mic-wave">
-          <span></span><span></span><span></span><span></span><span></span>
-        </div>
-        <span class="voice-status-text" id="voiceStatusText">🎤 녹음 중... 손 떼면 전송합니다</span>
-      </div>
-
-      <!-- 녹음 완료 상태 표시 -->
-      <div class="transcript-box" id="transcriptBox" style="margin-top:12px;">
-        <div class="transcript-label" id="transcriptLabel">🎤 녹음 완료</div>
-        <div class="transcript-text" id="transcriptText"></div>
-      </div>
-
-      <!-- 음성 완료 후 액션 버튼 -->
+      <!-- 음성 완료 후 액션 버튼 (맨 아래) -->
       <div id="voiceActionBtns" style="display:none; margin-top:14px;">
         <button class="submit-btn" id="voiceSubmitBtn" style="width: 100%; margin: 0;" onclick="submitFromVoice()">
           📤 서류 만들기
         </button>
       </div>
 
-      <!-- 텍스트 입력 패널 -->
-      <div class="input-panel" id="inputPanel" style="margin-top:14px;">
-        <label class="input-label" for="userText">📋 민원 내용을 입력하세요</label>
-        <div id="transcriptConfirmMsg" style="display:none; color:var(--yellow); font-size:15px; font-weight:700; margin-bottom:4px;">💡 이 내용이 맞으면 아래 서류 만들기를 눌러주세요</div>
-        <textarea id="userText" placeholder="예시) 우리 아파트 윗집에서 매일 밤 11시 이후에 뛰어다니는 소리가 들립니다. 층간소음 민원 서류를 작성해주세요."></textarea>
-        <div style="display:flex; gap:10px; flex-direction:row;">
-          <button class="submit-btn" style="flex: 1;" onclick="submitText()">
-            🚀 서류 만들기
-          </button>
-          <button class="submit-btn" id="textResetBtn" style="flex: 1; background: #555; color: #fff; border: 2px solid #555; display:none; font-size: 18px;" onclick="resetAll()">
-            🔄 처음부터 다시 녹음
-          </button>
-        </div>
-      </div>
     </div>
 
     <!-- 로딩 -->
