@@ -1,4 +1,10 @@
 {
+  "functions": {
+    "api/generate.js": {
+      "memory": 1024,
+      "maxDuration": 10
+    }
+  },
   "rewrites": [
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
